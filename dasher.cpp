@@ -139,6 +139,26 @@ bool pauseColorSwitch{true};
 // Jump buffer so the Scarfy does not have to be on the ground before jumping
 bool jumpBuffer{false};
 
+// Jump Power Charge
+int jumpPowerCharge{8};
+
+// Jump Power Anim Frame
+int jumpPowerAnimFrame{0};
+
+// Jump Power Anim Frame Counter
+int jumpPowerAnimFrameCounter{0};
+
+// Check if jump power was activated
+int jumpPowerActivatedFrameCounter{0};
+
+// Color switch bool
+bool jumpPowerUsedColor{true};
+
+// Display jump power used message
+int jumpPowerUsedFrameCounter{0};
+
+// Check if jump power is charged up to display non animated max charge;
+bool jumpPowerChargeFirstTime{true};
 
 // Enum for screen types
 typedef enum GameScreen {TITLE = 0, INFO, GAMEPLAY, ENDING } GameScreen;
@@ -147,11 +167,28 @@ typedef enum GameScreen {TITLE = 0, INFO, GAMEPLAY, ENDING } GameScreen;
 GameScreen currentScreen = TITLE;
 
 // Nebulae array decleration
-NebAnimData nebulae[sizeOfNebulae]{}; 
+NebAnimData nebulae[sizeOfNebulae]{};
 
+// Volume Frame Counter to make controls smooth
+int VolFrameCount{0};
+
+
+//*******************************************************************************
+// Strings
+//*******************************************************************************
 std::string endingString{"Press ENTER to go back to the Title"};
 
 std::string highscoreString = "Highscore: " + std::to_string(currentHighScore);
+
+std::string bonusString = "+ " + std::to_string(bonus);
+
+std::string scoreString = "Score: " + std::to_string(score);
+
+std::string pageText = "Page " + std::to_string(pageNum);
+
+//*******************************************************************************
+// Methods
+//*******************************************************************************
 
 bool isOnGround(AnimData data, int windowHeight)
 {
@@ -309,10 +346,357 @@ int UpdateScore(int count)
     }
 };
 
+void DrawPowerBar(Texture texture[], int jumpPowerCharge, Color color)
+{
+    DrawTextureEx(texture[jumpPowerCharge], {24, 48}, 0.0f, 2.0f, color);
+};
+
+void DrawPowerBarAnim(Texture texture[], int jumpPowerCharge, Color color)
+{
+    DrawTextureEx(texture[jumpPowerCharge], {24, 48}, 0.0f, 2.0f, color);
+};
+
+void RestGlobalValues()
+{
+    velocity = 0;
+    
+    score = 0;
+    
+    scoreCount = 0;
+
+    bonusFrameCounter = 0;
+
+    bonus = 0;
+
+    moveUp = -5;
+
+    highscoreCounter = 0;
+
+    newHighscore = false;
+
+    jumpBuffer = false;
+
+    jumpPowerCharge = 8;
+
+    jumpPowerChargeFirstTime = true;
+
+    jumpPowerActivatedFrameCounter = 0;
+
+    jumpPowerUsedFrameCounter = 0;
+
+    bonusFrameCounter = 0;
+};
+
+void DrawVolumeControlChanges()
+{
+    // Music control updates
+
+    // Header control display
+
+    switch(currentScreen)
+    {
+        case TITLE:
+        {
+            DrawText("M = Mute Music \t - = Lower Volume \t + = Raise Volume", windowWidth / 2 - MeasureText("M = Mute Music \t - = Lower Volume \t + = Raise Volume", 12) / 2, windowHeight - 12, 12, WHITE);
+        }break;
+        case INFO:
+        {
+            DrawText("M = Mute Music \t - = Lower Volume \t + = Raise Volume", windowWidth / 2 - MeasureText("M = Mute Music \t - = Lower Volume \t + = Raise Volume", 12) / 2, windowHeight - 12, 12, WHITE);
+        }break;
+        case GAMEPLAY:
+        {
+            DrawText("P = Pause \t M = Mute Music \t - = Lower Volume \t + = Raise Volume", windowWidth / 2 - MeasureText("P = Pause \t M = Mute Music \t - = Lower Volume \t + = Raise Volume", 12) / 2, 12, 12, color);
+        }break;
+        case ENDING:
+        {
+            DrawText("M = Mute Music \t - = Lower Volume \t + = Raise Volume", windowWidth / 2 - MeasureText("M = Mute Music \t - = Lower Volume \t + = Raise Volume", 12) / 2, 12, 12, WHITE);
+        }break;
+        default: break;
+    }
+    if(muteFrameCounter > 0)
+    {
+        muteFrameCounter--;
+
+        if(mute)
+        {
+            DrawText("Muted Music", windowWidth - MeasureText("Muted Music", 12) - 10, windowHeight - 24, 12, WHITE);
+        }
+        else
+        {
+            DrawText("Unmuted Music", windowWidth - MeasureText("Unmuted Music", 12) - 10, windowHeight - 24, 12, WHITE);
+        }
+    }   
+                
+    if(lowerVolFrameCounter > 0 &&  lowerVolFrameCounter > raiseVolFrameCounter)
+    {
+        lowerVolFrameCounter--;
+        if(raiseVolFrameCounter > 0)
+        {
+            raiseVolFrameCounter = 0;
+        }
+        std::string loweredString = "Volume Lowered: Volume = " + std::to_string((int)(volume * 100));
+        DrawText(loweredString.c_str(), windowWidth - MeasureText(loweredString.c_str(), 12) - 10, windowHeight - 12, 12, WHITE);
+    }     
+    else if(raiseVolFrameCounter > 0)
+    {
+        raiseVolFrameCounter--;
+        if(lowerVolFrameCounter > 0)
+        {
+            lowerVolFrameCounter = 0;
+        }    
+        std::string raisedString = "Volume Raised: Volume = " + std::to_string((int)(volume * 100));
+        DrawText(raisedString.c_str(), windowWidth - MeasureText(raisedString.c_str(), 12) - 10, windowHeight - 12, 12, WHITE);            
+    }
+};
+
+void DrawGameplay(Texture powerBar[], Texture powerBarAnim[], int scarfyX, int scarfyY)
+{
+    // Draw current score
+    DrawText(scoreString.c_str(), 24, 24, 24, color);
+
+    // Draw Jump Bar
+    if(jumpPowerCharge <= 8 && jumpPowerChargeFirstTime == true)
+    {
+        if(jumpPowerAnimFrameCounter >= 30)
+        {
+            jumpPowerChargeFirstTime = false;
+            jumpPowerAnimFrameCounter = 0;
+        }
+
+        if(jumpPowerCharge == 8)
+        {
+        jumpPowerAnimFrameCounter++;
+        }
+
+        DrawPowerBar(powerBar, jumpPowerCharge, color);
+    }
+    else
+    {
+        if(jumpPowerAnimFrameCounter >= 30 && !pause)
+        {
+            jumpPowerAnimFrameCounter = 0;
+            jumpPowerAnimFrame++;
+            if(jumpPowerAnimFrame > 4)
+            {
+                jumpPowerAnimFrame = 0;
+            }
+        }
+
+        DrawPowerBarAnim(powerBarAnim, jumpPowerAnimFrame, color);
+        jumpPowerAnimFrameCounter++;
+    }
+
+    // Draw high score
+    DrawText(highscoreString.c_str(), windowWidth - MeasureText(highscoreString.c_str(), 24) - 24, 24, 24, color);
+
+    // Draw bonus aboe Scarfy 
+    if(bonusFrameCounter > 0)
+    {
+        bonusFrameCounter--;
+        moveUp--;
+        DrawText(bonusString.c_str(), scarfyX, scarfyY + moveUp, 24, color);
+    }
+
+    // Display Pause over grayed out game
+    if(pause)
+    {
+        pauseFrameCounter++;
+
+        if (pauseFrameCounter == 30)
+        {
+            pauseFrameCounter = 0;
+            pauseColorSwitch = !pauseColorSwitch;
+
+        }
+
+            if(pauseColorSwitch)
+            {
+                DrawText("Game Paused", windowWidth / 2 - MeasureText("Game Paused", 48) / 2, windowHeight / 2 - 48, 48, WHITE);
+            }
+            else
+            {
+                DrawText("Game Paused", windowWidth / 2 - MeasureText("Game Paused", 48) / 2, windowHeight / 2 - 48, 48, LIGHTGRAY);
+            }
+    }
+        
+    if (jumpPowerUsedFrameCounter > 0)
+    {
 
 
-using namespace std;
+        if(jumpPowerUsedFrameCounter % 10 == 0)
+        {
+            jumpPowerUsedColor = !jumpPowerUsedColor;
+        }
 
+        if(jumpPowerUsedFrameCounter % 2 == 0)
+            moveUp--;
+
+        jumpPowerUsedFrameCounter--;
+
+        if(jumpPowerUsedColor)
+        {
+        DrawText("That was close!", scarfyX, scarfyY + moveUp, 24, RED);
+        }
+        else
+        {
+        DrawText("That was close!", scarfyX, scarfyY + moveUp, 24, PINK);
+        }
+    }
+
+    // Draw bonus aboe Scarfy 
+    if(jumpPowerActivatedFrameCounter > 0 )
+    {  
+        if(highscoreCounter > 0)
+            jumpPowerActivatedFrameCounter = 0;
+
+        jumpPowerActivatedFrameCounter--;
+        DrawText("Double Jump Activated", windowWidth / 2 - MeasureText("Double Jump Activated", 50) / 2, windowHeight / 2, 50, MAGENTA);
+    }
+
+    if(bonusFrameCounter <= 0 && jumpPowerUsedFrameCounter <= 0)
+    {
+        moveUp = -5;
+    }
+
+    
+    // Check for new high score and draw if there is a new one
+    if(highscoreCounter > 0)
+    {
+        if(colorCount % 10 == 0)
+        {
+            changeColor = !changeColor;
+        }
+
+        if(jumpPowerActivatedFrameCounter > 0)
+            jumpPowerActivatedFrameCounter = 0;
+        
+        if(!changeColor)
+        {
+            DrawText("NEW HIGHSCORE!!!", windowWidth / 2 - MeasureText("NEW HIGHSCORE!!!", 50) / 2, windowHeight / 2, 50, PURPLE);
+        }
+        else
+        {
+            DrawText("NEW HIGHSCORE!!!", windowWidth / 2 - MeasureText("NEW HIGHSCORE!!!", 50) / 2, windowHeight / 2, 50, SKYBLUE);
+        }
+
+        colorCount++;
+        highscoreCounter--; 
+    }
+
+    // Music control updates
+    DrawVolumeControlChanges();
+};
+
+void DrawTitle()
+{
+            // Title Text
+            DrawText("Dapper Dasher", 20, 20, 60, LIGHTGRAY);
+            DrawText("Press ENTER to play Dapper Dasher", windowWidth / 2 - MeasureText("Press ENTER to play Dapper Dasher", 36) / 2, windowHeight / 2, 36, WHITE);
+            DrawText("(Press R to reset highscore or Press I to see Info)", windowWidth / 2 - MeasureText("(Press R to reset highscore or Press I to see Info)", 24) / 2, windowHeight / 2 + 60, 24, WHITE);
+
+            // Footer control display
+            DrawText(highscoreString.c_str(), windowWidth - MeasureText(highscoreString.c_str(), 24) - 24, 24, 24, WHITE);
+
+            DrawVolumeControlChanges();
+
+};
+
+
+void DrawInfo(Texture2D scarfy, Texture2D nebula, int scarfyHeight, Rectangle scarfyInfoRec, Vector2 scaryInfoPos)
+{
+    // Check which info page to draw
+    switch(pageNum)
+    {
+        // Scarfy info page
+        case 1:
+        {             
+            DrawTextureRec(scarfy, scarfyInfoRec, scaryInfoPos, WHITE);
+
+            DrawText("Player", windowWidth / 2 - MeasureText("Player", 48) / 2, windowHeight / 2 - 145, 48, WHITE);
+
+            DrawText("This is Scarfy. Help him avoid Nebulae!", 
+            windowWidth / 2 - MeasureText("This is Scarfy! Help him avoid Nebulae", 24) / 2, windowHeight / 2 + scarfyHeight / 2 + 12, 24, WHITE);
+
+            DrawText("A = Left \t D = Right \t SPACE = Jump",
+            windowWidth / 2 - MeasureText("A = Left \t D = Right \t SPACE = Jump", 24) / 2, windowHeight / 2 + scarfyHeight / 2 + 48, 24, WHITE);
+
+            DrawText("ENTER = Title \t -> = page up",
+            windowWidth / 2 - MeasureText("ENTER = Title \t -> = page up", 24) / 2, windowHeight / 2 + scarfyHeight / 2 + 84, 24, WHITE);
+
+            DrawText(pageText.c_str(), windowWidth / 2 - MeasureText(pageText.c_str(), 12) / 2, windowHeight / 2 + scarfyHeight / 2 + 120, 12, WHITE);
+
+        }break;
+        
+        // Neula info page
+        case 2:
+        {                        
+            DrawTextureRec(nebula, nebulae[0].rec, {windowWidth / 2 - nebulae[0].rec.width / 2, windowHeight / 2 - nebulae[0].rec.height / 2}, WHITE);
+
+            DrawText("Enemies", windowWidth / 2 - MeasureText("Enemies", 48) / 2, windowHeight / 2 - 145, 48, WHITE);
+
+            DrawText("This is a Nebula. Avoid these at all costs!", 
+            windowWidth / 2 - MeasureText("This is a Nebula. Avoid these at all costs!", 24) / 2, windowHeight / 2 + nebulae[0].rec.height / 2 + 12, 24, WHITE);
+            
+            DrawText("Hint: You can move in the air.", 
+            windowWidth / 2 - MeasureText("Hint: You can move in the air.", 24) / 2, windowHeight / 2 + nebulae[0].rec.height / 2 + 48, 24, WHITE);
+
+            DrawText("ENTER = Title \t <- = page down \t -> = page up",
+            windowWidth / 2 - MeasureText("ENTER = Title \t <- = page down \t -> = page up", 24) / 2, windowHeight / 2 + nebulae[0].rec.height / 2 + 84, 24, WHITE);
+
+
+            DrawText(pageText.c_str(), windowWidth / 2 - MeasureText(pageText.c_str(), 12) / 2, windowHeight / 2 + scarfyHeight / 2 + 120, 12, WHITE);
+        }break;
+
+        // Bonus info page
+        case 3:
+        {
+            DrawText("Bonuses", windowWidth / 2 - MeasureText("Bonuses", 48) / 2, windowHeight / 2 - 145, 48, WHITE);
+
+            DrawText("Passing a Nebula = +100 points", windowWidth / 2 - MeasureText("Passing a Nebula = +100 points", 24) / 2, windowHeight / 2 - 48, 24, WHITE);
+            DrawText("Passing 5 Nebulae = +200 points", windowWidth / 2 - MeasureText("Passing 5 Nebulae = +200 points", 24) / 2, windowHeight / 2, 24, WHITE);
+            DrawText("Passing 10 Nebula = +500 points", windowWidth / 2 - MeasureText("Passing 10 Nebula = +500 points", 24) / 2, windowHeight / 2 + 48, 24, WHITE);
+            DrawText("Passing 25 Nebula = +1000 points", windowWidth / 2 - MeasureText("Passing 25 Nebula = +1000 points", 24) / 2, windowHeight / 2 + 96, 24, WHITE);
+
+            DrawText("ENTER = Title \t <- = page down \t -> = page up",
+            windowWidth / 2 - MeasureText("ENTER = Title \t <- = page down \t -> = page up", 24) / 2, windowHeight / 2 + 144, 24, WHITE);
+
+            DrawText(pageText.c_str(), windowWidth / 2 - MeasureText(pageText.c_str(), 12) / 2, windowHeight / 2 + scarfyHeight / 2 + 120, 12, WHITE);
+
+        }break;
+
+        // Credits page
+        case 4:
+        {
+            DrawText("Credits", windowWidth / 2 - MeasureText("Credits", 48) / 2, windowHeight / 2 - 145, 48, WHITE);
+
+            DrawText("Music", windowWidth / 2 - MeasureText("Music", 24) / 2, windowHeight / 2 - 72, 24, WHITE);
+            DrawText("_____", windowWidth / 2 - MeasureText("_____", 24) / 2, windowHeight / 2 - 68, 24, WHITE);
+            DrawText("Joshua McLean: mrjoshuamclean.com", windowWidth / 2 - MeasureText("Joshua McLean: mrjoshuamclean.com", 24) / 2, windowHeight / 2 - 48, 24, WHITE);
+
+            DrawText("Info Background", windowWidth / 2 - MeasureText("nfo Background", 24) / 2, windowHeight / 2, 24, WHITE);
+            DrawText("_______________", windowWidth / 2 - MeasureText("_______________", 24) / 2, windowHeight / 2 + 4, 24, WHITE);
+            DrawText("PingTree: pngtree.com/588ku_12402278", windowWidth / 2 - MeasureText("PingTree: pngtree.com/588ku_12402278", 24) / 2, windowHeight / 2 + 24, 24, WHITE); 
+
+            DrawText("Textures and Engine", windowWidth / 2 - MeasureText("Textures and Engine", 24) / 2, windowHeight / 2 + 72, 24, WHITE);
+            DrawText("___________________", windowWidth / 2 - MeasureText("___________________", 24) / 2, windowHeight / 2 + 76, 24, WHITE);
+            DrawText("Raylib: raylib.com", windowWidth / 2 - MeasureText("Raylib: raylib.com", 24) / 2, windowHeight / 2 + 96, 24, WHITE);
+
+            DrawText("ENTER = Title \t <- = page down",
+            windowWidth / 2 - MeasureText("ENTER = Title \t <- = page down", 24) / 2, windowHeight / 2 + 144, 24, WHITE);
+
+            DrawText(pageText.c_str(), windowWidth / 2 - MeasureText(pageText.c_str(), 12) / 2, windowHeight / 2 + scarfyHeight / 2 + 120, 12, WHITE);
+        }break;
+        default: break;
+
+    }
+
+    // Music control updates
+    DrawVolumeControlChanges();
+};
+
+//*******************************************************************************
+// Game
+//*******************************************************************************
 int main()
 {        
     
@@ -424,9 +808,19 @@ int main()
     //Info Border
     Texture2D infoBorder = LoadTexture("textures/border.png");
 
+    // Jump Power Bar
+    Texture2D powerBar[9] = {LoadTexture("textures/PowerBar0.png"), LoadTexture("textures/PowerBar1.png"), LoadTexture("textures/PowerBar2.png"), LoadTexture("textures/PowerBar3.png"), LoadTexture("textures/PowerBar4.png"),
+    LoadTexture("textures/PowerBar5.png"), LoadTexture("textures/PowerBar6.png"), LoadTexture("textures/PowerBar7.png"), LoadTexture("textures/PowerBar8.png")};
+
+    // Jump Power Bar Full Anim
+    Texture2D powerBarAnim[5] = {LoadTexture("textures/PowerBarAnim1.png"), LoadTexture("textures/PowerBarAnim2.png"), LoadTexture("textures/PowerBarAnim3.png"), 
+    LoadTexture("textures/PowerBarAnim4.png"), LoadTexture("textures/PowerBarAnim5.png")}; 
+
     SetTargetFPS(60);
     while(!WindowShouldClose())
     {        
+
+        VolFrameCount++;
 
         UpdateMusicStream(music);
 
@@ -435,8 +829,7 @@ int main()
     BeginDrawing();
     ClearBackground(WHITE);
 
-    string bonusString = "+ " + to_string(bonus);
-    string scoreString = "Score: " + to_string(score);
+    
     //Updates based on screen type
     switch(currentScreen)
     {
@@ -451,7 +844,7 @@ int main()
             if(IsKeyPressed(KEY_R))
             {
                 currentHighScore = 0;
-                highscoreString = "Highscore: " + to_string(currentHighScore);
+                highscoreString = "Highscore: " + std::to_string(currentHighScore);
             }
 
             if(IsKeyPressed(KEY_I))
@@ -485,27 +878,40 @@ int main()
                 volChange = false;
             }
 
-            if(IsKeyPressed(KEY_EQUAL))
+            if(volume < 1.0  && IsKeyPressed(KEY_EQUAL))
             {
                 raiseVolFrameCounter = 30;
-                if(volume < 1.0)
-                {
-                    volume += 0.1;
-                    SetMusicVolume(music, volume);
-                    volChange = true;
-                }
+                volume += 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+                VolFrameCount = 1;
             }                
             
-            if(IsKeyPressed(KEY_MINUS))
+            if(!(volume - 0.1 < 0.0) &&  IsKeyPressed(KEY_MINUS))
             {
                 lowerVolFrameCounter = 30;
-                if(!(volume - 0.1 < 0.0))
-                {
-                    volume -= 0.1;
-                    SetMusicVolume(music, volume);
-                    volChange = true;
-                }
+                volume -= 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+                VolFrameCount = 1;
             }
+            
+            if(volume < 1.0 && VolFrameCount % 15 == 0 && IsKeyDown(KEY_EQUAL))
+            {
+                raiseVolFrameCounter = 30;
+                volume += 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+            }                
+            
+            if(!(volume - 0.1 < 0.0) && VolFrameCount % 15 == 0 && IsKeyDown(KEY_MINUS))
+            {
+                lowerVolFrameCounter = 30;
+                volume -= 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+            }
+
 
         } break;
         case INFO:
@@ -537,28 +943,39 @@ int main()
                 volChange = false;
             }
 
-            if(IsKeyPressed(KEY_EQUAL))
+            if(volume < 1.0  && IsKeyPressed(KEY_EQUAL))
             {
                 raiseVolFrameCounter = 30;
-                if(volume < 1.0)
-                {
-                    volume += 0.1;
-                    SetMusicVolume(music, volume);
-                    volChange = true;
-                }
+                volume += 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+                VolFrameCount = 1;
             }                
             
-            if(IsKeyPressed(KEY_MINUS))
+            if(!(volume - 0.1 < 0.0) &&  IsKeyPressed(KEY_MINUS))
             {
                 lowerVolFrameCounter = 30;
-                if(!(volume - 0.1 < 0.0))
-                {
-                    volume -= 0.1;
-                    SetMusicVolume(music, volume);
-                    volChange = true;
-                }
+                volume -= 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+                VolFrameCount = 1;
             }
-
+            
+            if(volume < 1.0 && VolFrameCount % 15 == 0 && IsKeyDown(KEY_EQUAL))
+            {
+                raiseVolFrameCounter = 30;
+                volume += 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+            }                
+            
+            if(!(volume - 0.1 < 0.0) && VolFrameCount % 15 == 0 && IsKeyDown(KEY_MINUS))
+            {
+                lowerVolFrameCounter = 30;
+                volume -= 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+            }
 
             if(IsKeyPressed(KEY_ENTER))
             {
@@ -702,27 +1119,41 @@ int main()
                 volChange = false;
             }
 
-            if(IsKeyPressed(KEY_EQUAL))
+            if(volume < 1.0  && IsKeyPressed(KEY_EQUAL))
             {
                 raiseVolFrameCounter = 30;
-                if(volume < 1.0)
-                {
-                    volume += 0.1;
-                    SetMusicVolume(music, volume);
-                    volChange = true;
-                }
+                volume += 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+                VolFrameCount = 1;
             }                
             
-            if(IsKeyPressed(KEY_MINUS))
+            if(!(volume - 0.1 < 0.0) &&  IsKeyPressed(KEY_MINUS))
             {
                 lowerVolFrameCounter = 30;
-                if(!(volume - 0.1 < 0.0))
-                {
-                    volume -= 0.1;
-                    SetMusicVolume(music, volume);
-                    volChange = true;
-                }
+                volume -= 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+                VolFrameCount = 1;
             }
+            
+            if(volume < 1.0 && VolFrameCount % 15 == 0 && IsKeyDown(KEY_EQUAL))
+            {
+                raiseVolFrameCounter = 30;
+                volume += 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+            }                
+            
+            if(!(volume - 0.1 < 0.0) && VolFrameCount % 15 == 0 && IsKeyDown(KEY_MINUS))
+            {
+                lowerVolFrameCounter = 30;
+                volume -= 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+            }
+
+
 
             if(IsKeyPressed(KEY_P))
             {
@@ -765,11 +1196,28 @@ int main()
                 {
                     velocity += jumpVel;
                     isInAir = true;
-                }                    
+                }                  
                 else if(IsKeyPressed(KEY_SPACE) && isInAir && scarfyData.pos.y >= windowHeight - 200)
                 {
                         jumpBuffer = true;
                 }
+                else if(IsKeyPressed(KEY_SPACE) && isInAir && jumpPowerCharge == 8)
+                {
+                    if (velocity >= 0)
+                    {
+                        velocity = 0;
+                        velocity += jumpVel;
+                    }
+                    else
+                    {
+                        velocity += -200;
+                    }
+                    isInAir = true;
+                    jumpPowerCharge = 0;
+                    jumpPowerChargeFirstTime = true;
+                    jumpPowerAnimFrameCounter = 0;
+                    jumpPowerUsedFrameCounter = 60;
+                }  
 
                 if(IsKeyDown(KEY_D))
                 {
@@ -879,7 +1327,6 @@ int main()
                         
                     };
 
-                    
                     if(CheckCollisionRecs(nebRec, scarfyRec))
                     {
                         for(int i = 0; i < sizeOfNebulae; i++)
@@ -891,6 +1338,7 @@ int main()
                     }
                                         
                 }
+
                 // Check if Scarfy has passed a nebula and landing safely on the ground
                 // Award points based on how many nebulae he has passed
                 for(int i = 0; i < sizeOfNebulae; i++)
@@ -898,6 +1346,17 @@ int main()
                     if(nebulae[i].scored == false && scarfyData.pos.x > nebulae[i].pos.x && isOnGround(scarfyData, windowHeight))
                     {
                         scoreCount++;
+
+                        if(jumpPowerCharge < 8 and scoreCount % 2 == 0)
+                        {
+                            jumpPowerCharge++;
+                        }
+
+                        if(jumpPowerCharge == 8 && jumpPowerChargeFirstTime)
+                        {
+                            jumpPowerActivatedFrameCounter = 60;
+                        }
+
                         if (UpdateScore(scoreCount) > 0)
                         {
                             bonus = UpdateScore(scoreCount);
@@ -917,20 +1376,20 @@ int main()
                 if(score > currentHighScore && !newHighscore)
                 {
                     currentHighScore = score;
-                    highscoreString = "Highscore: " + to_string(currentHighScore);
+                    highscoreString = "Highscore: " + std::to_string(currentHighScore);
                     newHighscore = true;
-                    highscoreCounter = 180;
+                    highscoreCounter = 120;
                 }
                 else if(newHighscore)
                 {
                     currentHighScore = score;
-                    highscoreString = "Highscore: " + to_string(currentHighScore);
+                    highscoreString = "Highscore: " + std::to_string(currentHighScore);
 
                 }
 
-                bonusString = "+ " + to_string(bonus);
+                bonusString = "+ " + std::to_string(bonus);
 
-                scoreString = "Score: " + to_string(score);
+                scoreString = "Score: " + std::to_string(score);
             }
 
         } break;
@@ -962,27 +1421,40 @@ int main()
                 volChange = false;
             }
 
-            if(IsKeyPressed(KEY_EQUAL))
+            if(volume < 1.0  && IsKeyPressed(KEY_EQUAL))
             {
                 raiseVolFrameCounter = 30;
-                if(volume < 1.0)
-                {
-                    volume += 0.1;
-                    SetMusicVolume(music, volume);
-                    volChange = true;
-                }
+                volume += 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+                VolFrameCount = 1;
             }                
             
-            if(IsKeyPressed(KEY_MINUS))
+            if(!(volume - 0.1 < 0.0) &&  IsKeyPressed(KEY_MINUS))
             {
                 lowerVolFrameCounter = 30;
-                if(!(volume - 0.1 < 0.0))
-                {
-                    volume -= 0.1;
-                    SetMusicVolume(music, volume);
-                    volChange = true;
-                }
+                volume -= 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+                VolFrameCount = 1;
             }
+            
+            if(volume < 1.0 && VolFrameCount % 15 == 0 && IsKeyDown(KEY_EQUAL))
+            {
+                raiseVolFrameCounter = 30;
+                volume += 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+            }                
+            
+            if(!(volume - 0.1 < 0.0) && VolFrameCount % 15 == 0 && IsKeyDown(KEY_MINUS))
+            {
+                lowerVolFrameCounter = 30;
+                volume -= 0.1;
+                SetMusicVolume(music, volume);
+                volChange = true;
+            }
+
 
             // Go to TITLE Screen and reset all game items that need to be reset
             if(IsKeyPressed(KEY_ENTER))
@@ -999,25 +1471,12 @@ int main()
                     nebulae[i].pos.x = windowWidth + i * GetRandomValue(150, 800);
                     nebulae[i].scored = false;
                     nebulae[i].vel = GetRandomValue(200, 300);
+
+                    
                     
                 }
 
-                
-                velocity = 0;
-                score = 0;
-                
-                scoreCount = 0;
-
-                bonusFrameCounter = 0;
-
-                bonus = 0;
-
-                moveUp = -5;
-
-                highscoreCounter = 0;
-
-                newHighscore = false;
-                jumpBuffer = false;
+                RestGlobalValues();
             }
 
         } break;
@@ -1028,7 +1487,7 @@ int main()
     switch(currentScreen)
     {
         case TITLE:
-        {
+        {   
             //Draw Background
             DrawBackground(backgrounds, background, dt, sizeOfBackgrounds, color);
 
@@ -1037,58 +1496,13 @@ int main()
 
             //Draw foreground
             DrawBackground(foregrounds, foreground, dt, sizeOfBackgrounds, color);
-
-            // Title Text
-            DrawText("Dapper Dasher", 20, 20, 60, LIGHTGRAY);
-            DrawText("Press ENTER to play Dapper Dasher", windowWidth / 2 - MeasureText("Press ENTER to play Dapper Dasher", 36) / 2, windowHeight / 2, 36, WHITE);
-            DrawText("(Press R to reset highscore or Press I to see Info)", windowWidth / 2 - MeasureText("(Press R to reset highscore or Press I to see Info)", 24) / 2, windowHeight / 2 + 60, 24, WHITE);
-
-            // Footer control display
-            DrawText("M = Mute Music \t - = Lower Volume \t + = Raise Volume", windowWidth / 2 - MeasureText("M = Mute Music \t - = Lower Volume \t + = Raise Volume", 12) / 2, windowHeight - 12, 12, WHITE);
-            DrawText(highscoreString.c_str(), windowWidth - MeasureText(highscoreString.c_str(), 24) - 24, 24, 24, WHITE);
-
             
-            // Music control updates
-            if(muteFrameCounter > 0)
-            {
-                muteFrameCounter--;
-
-                if(mute)
-                {
-                    DrawText("Muted Music", windowWidth - MeasureText("Muted Music", 12) - 10, windowHeight - 24, 12, WHITE);
-                }
-                else
-                {
-                    DrawText("Unmuted Music", windowWidth - MeasureText("Unmuted Music", 12) - 10, windowHeight - 24, 12, WHITE);
-                }
-            }   
-                        
-            if(lowerVolFrameCounter > 0 &&  lowerVolFrameCounter > raiseVolFrameCounter)
-            {
-                lowerVolFrameCounter--;
-                if(raiseVolFrameCounter > 0)
-                {
-                    raiseVolFrameCounter = 0;
-                }
-                string loweredString = "Volume Lowered: Volume = " + to_string((int)(volume * 100));
-                DrawText(loweredString.c_str(), windowWidth - MeasureText(loweredString.c_str(), 12) - 10, windowHeight - 12, 12, WHITE);
-            }     
-            else if(raiseVolFrameCounter > 0)
-            {
-                raiseVolFrameCounter--;
-                if(lowerVolFrameCounter > 0)
-                {
-                    lowerVolFrameCounter = 0;
-                }    
-                string raisedString = "Volume Raised: Volume = " + to_string((int)(volume * 100));
-                DrawText(raisedString.c_str(), windowWidth - MeasureText(raisedString.c_str(), 12) - 10, windowHeight - 12, 12, WHITE);            
-            }
-
+            DrawTitle();
 
         } break;
+
         case INFO:
         {   
-            string pageText = "Page " + to_string(pageNum);
 
             //Draw Background
             DrawBackground(backgrounds, background, dt, sizeOfBackgrounds, color);
@@ -1102,130 +1516,7 @@ int main()
             // Draw Info Border
             DrawTextureEx(infoBorder, {10.0f, -160.0f }, 0.0f, 0.39f, WHITE);
 
-            // Check which info page to draw
-            switch(pageNum)
-            {
-                // Scarfy info page
-                case 1:
-                {             
-                    DrawTextureRec(scarfy, scarfyInfoData.rec, scarfyInfoData.pos, WHITE);
-
-                    DrawText("Player", windowWidth / 2 - MeasureText("Player", 48) / 2, windowHeight / 2 - 145, 48, WHITE);
-
-                    DrawText("This is Scarfy. Help him avoid Nebulae!", 
-                    windowWidth / 2 - MeasureText("This is Scarfy! Help him avoid Nebulae", 24) / 2, windowHeight / 2 + scarfyData.rec.height / 2 + 12, 24, WHITE);
-
-                    DrawText("A = Left \t D = Right \t SPACE = Jump",
-                    windowWidth / 2 - MeasureText("A = Left \t D = Right \t SPACE = Jump", 24) / 2, windowHeight / 2 + scarfyData.rec.height / 2 + 48, 24, WHITE);
-
-                    DrawText("ENTER = Title \t -> = page up",
-                    windowWidth / 2 - MeasureText("ENTER = Title \t -> = page up", 24) / 2, windowHeight / 2 + scarfyData.rec.height / 2 + 84, 24, WHITE);
-
-                    DrawText(pageText.c_str(), windowWidth / 2 - MeasureText(pageText.c_str(), 12) / 2, windowHeight / 2 + scarfyData.rec.height / 2 + 120, 12, WHITE);
-
-                }break;
-                
-                // Neula info page
-                case 2:
-                {                        
-                    DrawTextureRec(nebula, nebulae[0].rec, {windowWidth / 2 - nebulae[0].rec.width / 2, windowHeight / 2 - nebulae[0].rec.height / 2}, WHITE);
-
-                    DrawText("Enemies", windowWidth / 2 - MeasureText("Enemies", 48) / 2, windowHeight / 2 - 145, 48, WHITE);
-
-                    DrawText("This is a Nebula. Avoid these at all costs!", 
-                    windowWidth / 2 - MeasureText("This is a Nebula. Avoid these at all costs!", 24) / 2, windowHeight / 2 + nebulae[0].rec.height / 2 + 12, 24, WHITE);
-                    
-                    DrawText("Hint: You can move in the air.", 
-                    windowWidth / 2 - MeasureText("Hint: You can move in the air.", 24) / 2, windowHeight / 2 + nebulae[0].rec.height / 2 + 48, 24, WHITE);
-
-                    DrawText("ENTER = Title \t <- = page down \t -> = page up",
-                    windowWidth / 2 - MeasureText("ENTER = Title \t <- = page down \t -> = page up", 24) / 2, windowHeight / 2 + nebulae[0].rec.height / 2 + 84, 24, WHITE);
-
-
-                    DrawText(pageText.c_str(), windowWidth / 2 - MeasureText(pageText.c_str(), 12) / 2, windowHeight / 2 + scarfyData.rec.height / 2 + 120, 12, WHITE);
-                }break;
-
-                // Bonus info page
-                case 3:
-                {
-                    DrawText("Bonuses", windowWidth / 2 - MeasureText("Bonuses", 48) / 2, windowHeight / 2 - 145, 48, WHITE);
-
-                    DrawText("Passing a Nebula = +100 points", windowWidth / 2 - MeasureText("Passing a Nebula = +100 points", 24) / 2, windowHeight / 2 - 48, 24, WHITE);
-                    DrawText("Passing 5 Nebulae = +200 points", windowWidth / 2 - MeasureText("Passing 5 Nebulae = +200 points", 24) / 2, windowHeight / 2, 24, WHITE);
-                    DrawText("Passing 10 Nebula = +500 points", windowWidth / 2 - MeasureText("Passing 10 Nebula = +500 points", 24) / 2, windowHeight / 2 + 48, 24, WHITE);
-                    DrawText("Passing 25 Nebula = +1000 points", windowWidth / 2 - MeasureText("Passing 25 Nebula = +1000 points", 24) / 2, windowHeight / 2 + 96, 24, WHITE);
-
-                    DrawText("ENTER = Title \t <- = page down \t -> = page up",
-                    windowWidth / 2 - MeasureText("ENTER = Title \t <- = page down \t -> = page up", 24) / 2, windowHeight / 2 + 144, 24, WHITE);
-
-                    DrawText(pageText.c_str(), windowWidth / 2 - MeasureText(pageText.c_str(), 12) / 2, windowHeight / 2 + scarfyData.rec.height / 2 + 120, 12, WHITE);
-
-                }break;
-
-                // Credits page
-                case 4:
-                {
-                    DrawText("Credits", windowWidth / 2 - MeasureText("Credits", 48) / 2, windowHeight / 2 - 145, 48, WHITE);
-
-                    DrawText("Music", windowWidth / 2 - MeasureText("Music", 24) / 2, windowHeight / 2 - 72, 24, WHITE);
-                    DrawText("_____", windowWidth / 2 - MeasureText("_____", 24) / 2, windowHeight / 2 - 68, 24, WHITE);
-                    DrawText("Joshua McLean: mrjoshuamclean.com", windowWidth / 2 - MeasureText("Joshua McLean: mrjoshuamclean.com", 24) / 2, windowHeight / 2 - 48, 24, WHITE);
-
-                    DrawText("Info Background", windowWidth / 2 - MeasureText("nfo Background", 24) / 2, windowHeight / 2, 24, WHITE);
-                    DrawText("_______________", windowWidth / 2 - MeasureText("_______________", 24) / 2, windowHeight / 2 + 4, 24, WHITE);
-                    DrawText("PingTree: pngtree.com/588ku_12402278", windowWidth / 2 - MeasureText("PingTree: pngtree.com/588ku_12402278", 24) / 2, windowHeight / 2 + 24, 24, WHITE); 
-
-                    DrawText("Textures and Engine", windowWidth / 2 - MeasureText("Textures and Engine", 24) / 2, windowHeight / 2 + 72, 24, WHITE);
-                    DrawText("___________________", windowWidth / 2 - MeasureText("___________________", 24) / 2, windowHeight / 2 + 76, 24, WHITE);
-                    DrawText("Raylib: raylib.com", windowWidth / 2 - MeasureText("Raylib: raylib.com", 24) / 2, windowHeight / 2 + 96, 24, WHITE);
-
-                    DrawText("ENTER = Title \t <- = page down",
-                    windowWidth / 2 - MeasureText("ENTER = Title \t <- = page down", 24) / 2, windowHeight / 2 + 144, 24, WHITE);
-
-                    DrawText(pageText.c_str(), windowWidth / 2 - MeasureText(pageText.c_str(), 12) / 2, windowHeight / 2 + scarfyData.rec.height / 2 + 120, 12, WHITE);
-                }break;
-                default: break;
-
-            }
-
-            // Footer control display
-            DrawText("M = Mute Music \t - = Lower Volume \t + = Raise Volume", windowWidth / 2 - MeasureText("M = Mute Music \t - = Lower Volume \t + = Raise Volume", 12) / 2, windowHeight - 12, 12, WHITE);
-
-            // Music control updates
-            if(muteFrameCounter > 0)
-            {
-                muteFrameCounter--;
-
-                if(mute)
-                {
-                    DrawText("Muted Music", windowWidth - MeasureText("Muted Music", 12) - 10, windowHeight - 24, 12, WHITE);
-                }
-                else
-                {
-                    DrawText("Unmuted Music", windowWidth - MeasureText("Unmuted Music", 12) - 10, windowHeight - 24, 12, WHITE);
-                }
-            }   
-                        
-            if(lowerVolFrameCounter > 0 &&  lowerVolFrameCounter > raiseVolFrameCounter)
-            {
-                lowerVolFrameCounter--;
-                if(raiseVolFrameCounter > 0)
-                {
-                    raiseVolFrameCounter = 0;
-                }
-                string loweredString = "Volume Lowered: Volume = " + to_string((int)(volume * 100));
-                DrawText(loweredString.c_str(), windowWidth - MeasureText(loweredString.c_str(), 12) - 10, windowHeight - 12, 12, WHITE);
-            }     
-            else if(raiseVolFrameCounter > 0)
-            {
-                raiseVolFrameCounter--;
-                if(lowerVolFrameCounter > 0)
-                {
-                    lowerVolFrameCounter = 0;
-                }    
-                string raisedString = "Volume Raised: Volume = " + to_string((int)(volume * 100));
-                DrawText(raisedString.c_str(), windowWidth - MeasureText(raisedString.c_str(), 12) - 10, windowHeight - 12, 12, WHITE);            
-            }
+            DrawInfo(scarfy, nebula, scarfyData.rec.height, scarfyInfoData.rec, scarfyInfoData.pos);
 
         } break;
         case GAMEPLAY:
@@ -1249,108 +1540,7 @@ int main()
                 //draw scarfy
                 DrawTextureRec(scarfy, scarfyData.rec, scarfyData.pos, color);
 
-                // Draw current score
-                DrawText(scoreString.c_str(), 24, 24, 24, color);
-
-                // Draw high score
-                DrawText(highscoreString.c_str(), windowWidth - MeasureText(highscoreString.c_str(), 24) - 24, 24, 24, color);
-                
-                // Header control display
-                DrawText("P = Pause \t M = Mute Music \t - = Lower Volume \t + = Raise Volume", windowWidth / 2 - MeasureText("P = Pause \t M = Mute Music \t - = Lower Volume \t + = Raise Volume", 12) / 2, 12, 12, color);
-
-                // Draw bonus aboe Scarfy 
-                if(bonusFrameCounter > 0)
-                {
-                    bonusFrameCounter--;
-                    moveUp--;
-                    DrawText(bonusString.c_str(), scarfyData.pos.x, scarfyData.pos.y + moveUp, 24, color);
-                }
-
-                if(bonusFrameCounter <= 0)
-                {
-                    moveUp = -5;
-                }
-
-                // Display Pause over grayed out game
-                if(pause)
-                {
-                    pauseFrameCounter++;
-
-                    if (pauseFrameCounter == 15)
-                    {
-                        pauseFrameCounter = 0;
-                        pauseColorSwitch = !pauseColorSwitch;
-
-                    }
-
-                        if(pauseColorSwitch)
-                        {
-                            DrawText("Game Paused", windowWidth / 2 - MeasureText("Game Paused", 48) / 2, windowHeight / 2 - 48, 48, WHITE);
-                        }
-                        else
-                        {
-                            DrawText("Game Paused", windowWidth / 2 - MeasureText("Game Paused", 48) / 2, windowHeight / 2 - 48, 48, LIGHTGRAY);
-                        }
-                }
-                    
-
-                
-                // Check for new high score and draw if there is a new one
-                if(highscoreCounter > 0)
-                {
-                    if(colorCount % 10 == 0)
-                    {
-                        changeColor = !changeColor;
-                    }
-                    
-                    if(!changeColor)
-                    {
-                        DrawText("NEW HIGHSCORE!!!", windowWidth / 2 - MeasureText("NEW HIGHSCORE!!!", 50) / 2, windowHeight / 2, 50, PURPLE);
-                    }
-                    else
-                    {
-                        DrawText("NEW HIGHSCORE!!!", windowWidth / 2 - MeasureText("NEW HIGHSCORE!!!", 50) / 2, windowHeight / 2, 50, SKYBLUE);
-                    }
-
-                    colorCount++;
-                    highscoreCounter--; 
-                }
-
-            // Music control updates
-            if(muteFrameCounter > 0)
-            {
-                muteFrameCounter--;
-
-                if(mute)
-                {
-                    DrawText("Muted Music", windowWidth - MeasureText("Muted Music", 12) - 10, windowHeight - 24, 12, WHITE);
-                }
-                else
-                {
-                    DrawText("Unmuted Music", windowWidth - MeasureText("Unmuted Music", 12) - 10, windowHeight - 24, 12, WHITE);
-                }
-            }   
-                        
-            if(lowerVolFrameCounter > 0 &&  lowerVolFrameCounter > raiseVolFrameCounter)
-            {
-                lowerVolFrameCounter--;
-                if(raiseVolFrameCounter > 0)
-                {
-                    raiseVolFrameCounter = 0;
-                }
-                string loweredString = "Volume Lowered: Volume = " + to_string((int)(volume * 100));
-                DrawText(loweredString.c_str(), windowWidth - MeasureText(loweredString.c_str(), 12) - 10, windowHeight - 12, 12, WHITE);
-            }     
-            else if(raiseVolFrameCounter > 0)
-            {
-                raiseVolFrameCounter--;
-                if(lowerVolFrameCounter > 0)
-                {
-                    lowerVolFrameCounter = 0;
-                }    
-                string raisedString = "Volume Raised: Volume = " + to_string((int)(volume * 100));
-                DrawText(raisedString.c_str(), windowWidth - MeasureText(raisedString.c_str(), 12) - 10, windowHeight - 12, 12, WHITE);            
-            }
+               DrawGameplay(powerBar, powerBarAnim, scarfyData.pos.x, scarfyData.pos.y);
 
         } break;
         case ENDING:
@@ -1370,44 +1560,8 @@ int main()
             DrawText(scoreString.c_str(), windowWidth / 2 - MeasureText(scoreString.c_str(), 24) / 2, windowHeight /2 + 24, 24, WHITE);
             DrawText(endingString.c_str(), windowWidth / 2 - MeasureText(endingString.c_str(), 24) / 2, windowHeight /2 + 48, 24, WHITE);
             
-            // Header control display
-            DrawText("M = Mute Music \t - = Lower Volume \t + = Raise Volume", windowWidth / 2 - MeasureText("M = Mute Music \t - = Lower Volume \t + = Raise Volume", 12) / 2, 12, 12, WHITE);
-
             //music control updates 
-            if(muteFrameCounter > 0)
-            {
-                muteFrameCounter--;
-
-                if(mute)
-                {
-                    DrawText("Muted Music", windowWidth - MeasureText("Muted Music", 12) - 10, windowHeight - 24, 12, WHITE);
-                }
-                else
-                {
-                    DrawText("Unmuted Music", windowWidth - MeasureText("Unmuted Music", 12) - 10, windowHeight - 24, 12, WHITE);
-                }
-            }   
-                        
-            if(lowerVolFrameCounter > 0 &&  lowerVolFrameCounter > raiseVolFrameCounter)
-            {
-                lowerVolFrameCounter--;
-                if(raiseVolFrameCounter > 0)
-                {
-                    raiseVolFrameCounter = 0;
-                }
-                string loweredString = "Volume Lowered: Volume = " + to_string((int)(volume * 100));
-                DrawText(loweredString.c_str(), windowWidth - MeasureText(loweredString.c_str(), 12) - 10, windowHeight - 12, 12, WHITE);
-            }     
-            else if(raiseVolFrameCounter > 0)
-            {
-                raiseVolFrameCounter--;
-                if(lowerVolFrameCounter > 0)
-                {
-                    lowerVolFrameCounter = 0;
-                }    
-                string raisedString = "Volume Raised: Volume = " + to_string((int)(volume * 100));
-                DrawText(raisedString.c_str(), windowWidth - MeasureText(raisedString.c_str(), 12) - 10, windowHeight - 12, 12, WHITE);            
-            }
+            DrawVolumeControlChanges();
 
         } break;
         default:  break;
@@ -1416,7 +1570,17 @@ int main()
 
     EndDrawing();        
     }
-    
+
+    for(int i = 0; i < 9; i++)
+    {
+        UnloadTexture(powerBar[i]);
+    }
+
+    for(int i = 0; i < 5; i++)
+    {
+        UnloadTexture(powerBarAnim[i]);
+    }
+
     UnloadTexture(scarfy);
     UnloadTexture(nebula);
     UnloadTexture(background);
@@ -1424,4 +1588,3 @@ int main()
     UnloadTexture(foreground);
     CloseWindow();
 };
-
