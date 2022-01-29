@@ -2,6 +2,7 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include "emscripten.h"
 
 //*******************************************************************************
 // Structures 
@@ -51,7 +52,19 @@ struct BgData
 
 // Deafult high score 
 // Need to look into how to store this for an html5 game
-int currentHighScore{2100};
+int GetHighscore()
+{
+    int result = emscripten_run_script_int(TextFormat("window.localStorage.getItem(\"%s\")", "highscore"));
+    return  result;
+};
+
+void SetHighscore(int highscore)
+{    
+    std::string highscoreString = std::to_string(highscore);
+    emscripten_run_script(TextFormat("window.localStorage.setItem(\"%s\", %d)", "highscore", highscore));
+};
+
+int currentHighScore{GetHighscore()};
 
 // Window dimensions
 const int windowWidth{800};
@@ -160,6 +173,9 @@ int jumpPowerUsedFrameCounter{0};
 // Check if jump power is charged up to display non animated max charge;
 bool jumpPowerChargeFirstTime{true};
 
+// jump bar info count
+int jumpPowerInfoCount;
+
 // Enum for screen types
 typedef enum GameScreen {TITLE = 0, INFO, GAMEPLAY, ENDING } GameScreen;
 
@@ -189,6 +205,8 @@ std::string pageText = "Page " + std::to_string(pageNum);
 //*******************************************************************************
 // Methods
 //*******************************************************************************
+
+
 
 bool isOnGround(AnimData data, int windowHeight)
 {
@@ -602,11 +620,16 @@ void DrawTitle()
 };
 
 
-void DrawInfo(Texture2D scarfy, Texture2D nebula, int scarfyHeight, Rectangle scarfyInfoRec, Vector2 scaryInfoPos)
-{
+void DrawInfo(Texture2D scarfy, Texture2D nebula,Texture2D powerBar[], Texture2D powerBarAnim[], int scarfyHeight, Rectangle scarfyInfoRec, Vector2 scaryInfoPos)
+{        
+    jumpPowerInfoCount++;
+    
+    pageText = "Page " + std::to_string(pageNum);
+
     // Check which info page to draw
     switch(pageNum)
     {
+        
         // Scarfy info page
         case 1:
         {             
@@ -626,9 +649,42 @@ void DrawInfo(Texture2D scarfy, Texture2D nebula, int scarfyHeight, Rectangle sc
             DrawText(pageText.c_str(), windowWidth / 2 - MeasureText(pageText.c_str(), 12) / 2, windowHeight / 2 + scarfyHeight / 2 + 120, 12, WHITE);
 
         }break;
-        
-        // Neula info page
         case 2:
+        {
+            if(jumpPowerCharge < 9)
+            {
+                DrawTextureEx(powerBar[jumpPowerCharge], {(float)windowWidth / 2 - powerBar[jumpPowerCharge].width - 20, (float)windowHeight / 2 - powerBar[jumpPowerCharge].height - 40}, 0.0f, 3.0f, WHITE);
+                if(jumpPowerInfoCount % 20 == 0)
+                {
+                    jumpPowerCharge++;
+                }
+            }
+            else if(jumpPowerCharge > 8)
+            {
+                DrawTextureEx(powerBarAnim[jumpPowerAnimFrame], {(float)windowWidth / 2 - powerBarAnim[jumpPowerAnimFrame].width - 20, (float)windowHeight / 2 - powerBarAnim[jumpPowerAnimFrame].height - 40}, 0.0f, 3.0f, WHITE);
+                if(jumpPowerInfoCount % 20 == 0 && jumpPowerAnimFrame < 6)
+                {   
+                    jumpPowerAnimFrame++;
+                }
+                else if (jumpPowerAnimFrame > 5)
+                {
+                    jumpPowerAnimFrame = 0;
+                    jumpPowerCharge = 0;
+                }
+            }
+
+            DrawText("Double Jump Bar", windowWidth / 2 - MeasureText("Double Jump Bar", 48) / 2 + 15, windowHeight / 2 - 145, 48, WHITE);
+
+            DrawText("This is the Double Jump Bar. It starts filled!", windowWidth / 2 - MeasureText("This is the Double Jump Bar. It starts filled!", 24) / 2, windowHeight / 2  + 8, 24, WHITE);
+            DrawText("Passing nebulae fills it after using your double jump", windowWidth / 2 - MeasureText("Passing nebulae fills it after using your double jump", 24) / 2, windowHeight / 2  + 56, 24, WHITE);
+            DrawText("Every 2 nebulae passed fills 1 Oval", windowWidth / 2 - MeasureText("Every 2 nebulae passed fills 1 Oval", 24) / 2, windowHeight / 2  + 104, 24, WHITE);
+            
+            DrawText(pageText.c_str(), windowWidth / 2 - MeasureText(pageText.c_str(), 12) / 2, windowHeight / 2 + scarfyHeight / 2 + 120, 12, WHITE);
+
+
+        }break;
+        // Neula info page
+        case 3:
         {                        
             DrawTextureRec(nebula, nebulae[0].rec, {windowWidth / 2 - nebulae[0].rec.width / 2, windowHeight / 2 - nebulae[0].rec.height / 2}, WHITE);
 
@@ -648,7 +704,7 @@ void DrawInfo(Texture2D scarfy, Texture2D nebula, int scarfyHeight, Rectangle sc
         }break;
 
         // Bonus info page
-        case 3:
+        case 4:
         {
             DrawText("Bonuses", windowWidth / 2 - MeasureText("Bonuses", 48) / 2, windowHeight / 2 - 145, 48, WHITE);
 
@@ -665,7 +721,7 @@ void DrawInfo(Texture2D scarfy, Texture2D nebula, int scarfyHeight, Rectangle sc
         }break;
 
         // Credits page
-        case 4:
+        case 5:
         {
             DrawText("Credits", windowWidth / 2 - MeasureText("Credits", 48) / 2, windowHeight / 2 - 145, 48, WHITE);
 
@@ -673,16 +729,18 @@ void DrawInfo(Texture2D scarfy, Texture2D nebula, int scarfyHeight, Rectangle sc
             DrawText("_____", windowWidth / 2 - MeasureText("_____", 24) / 2, windowHeight / 2 - 68, 24, WHITE);
             DrawText("Joshua McLean: mrjoshuamclean.com", windowWidth / 2 - MeasureText("Joshua McLean: mrjoshuamclean.com", 24) / 2, windowHeight / 2 - 48, 24, WHITE);
 
-            DrawText("Info Background", windowWidth / 2 - MeasureText("nfo Background", 24) / 2, windowHeight / 2, 24, WHITE);
-            DrawText("_______________", windowWidth / 2 - MeasureText("_______________", 24) / 2, windowHeight / 2 + 4, 24, WHITE);
-            DrawText("PingTree: pngtree.com/588ku_12402278", windowWidth / 2 - MeasureText("PingTree: pngtree.com/588ku_12402278", 24) / 2, windowHeight / 2 + 24, 24, WHITE); 
+            DrawText("Textures", windowWidth / 2 - MeasureText("Textures", 24) / 2, windowHeight / 2 - 20, 24, WHITE);
+            DrawText("________", windowWidth / 2 - MeasureText("________", 24) / 2, windowHeight / 2 - 18, 24, WHITE);
+            DrawText("PingTree: pngtree.com/588ku_12402278", windowWidth / 2 - MeasureText("PingTree: pngtree.com/588ku_12402278", 24) / 2, windowHeight / 2 + 4, 24, WHITE); 
+            DrawText("Raylib: raylib.com", windowWidth / 2 - MeasureText("Raylib: raylib.com", 24) / 2, windowHeight / 2 + 28, 24, WHITE);
+            DrawText("LucaPixel: lucapixel.itch.io", windowWidth / 2 - MeasureText("LucaPixel: lucapixel.itch.io", 24) / 2, windowHeight / 2 + 52, 24, WHITE);
 
-            DrawText("Textures and Engine", windowWidth / 2 - MeasureText("Textures and Engine", 24) / 2, windowHeight / 2 + 72, 24, WHITE);
-            DrawText("___________________", windowWidth / 2 - MeasureText("___________________", 24) / 2, windowHeight / 2 + 76, 24, WHITE);
-            DrawText("Raylib: raylib.com", windowWidth / 2 - MeasureText("Raylib: raylib.com", 24) / 2, windowHeight / 2 + 96, 24, WHITE);
+            DrawText("Engine", windowWidth / 2 - MeasureText("Engine", 24) / 2, windowHeight / 2 + 78, 24, WHITE);
+            DrawText("______", windowWidth / 2 - MeasureText("______", 24) / 2, windowHeight / 2 + 82, 24, WHITE);
+            DrawText("Raylib: raylib.com", windowWidth / 2 - MeasureText("Raylib: raylib.com", 24) / 2, windowHeight / 2 + 107, 24, WHITE);
 
             DrawText("ENTER = Title \t <- = page down",
-            windowWidth / 2 - MeasureText("ENTER = Title \t <- = page down", 24) / 2, windowHeight / 2 + 144, 24, WHITE);
+            windowWidth / 2 - MeasureText("ENTER = Title \t <- = page down", 24) / 2, windowHeight / 2 + 152, 24, WHITE);
 
             DrawText(pageText.c_str(), windowWidth / 2 - MeasureText(pageText.c_str(), 12) / 2, windowHeight / 2 + scarfyHeight / 2 + 120, 12, WHITE);
         }break;
@@ -699,7 +757,12 @@ void DrawInfo(Texture2D scarfy, Texture2D nebula, int scarfyHeight, Rectangle sc
 //*******************************************************************************
 int main()
 {        
-    
+    if(GetHighscore() == 0)
+    {
+        currentHighScore = 3500;
+        SetHighscore(currentHighScore);
+        highscoreString = "Highscore: " + std::to_string(currentHighScore);
+    }
 
     InitWindow(windowWidth, windowHeight, "Dapper Dasher");
 
@@ -844,6 +907,7 @@ int main()
             if(IsKeyPressed(KEY_R))
             {
                 currentHighScore = 0;
+                SetHighscore(0);
                 highscoreString = "Highscore: " + std::to_string(currentHighScore);
             }
 
@@ -982,7 +1046,8 @@ int main()
                 currentScreen = TITLE;
                 pageNum = 1;
                 scarfyInfoData.pos = {(float)windowWidth / 2.0f - (float)scarfy.width / 6.0f/ 2.0f, (float)windowHeight / 2 - (float)scarfy.height / 2};
-
+                jumpPowerAnimFrame = 0;
+                jumpPowerCharge = 8;
             }
 
             if(IsKeyPressed(KEY_LEFT))
@@ -995,7 +1060,7 @@ int main()
 
             if(IsKeyPressed(KEY_RIGHT))
             {
-                if(pageNum < 4)
+                if(pageNum < 5)
                 {
                     pageNum++;
                 }
@@ -1375,7 +1440,10 @@ int main()
                 // Check if there is a new high score
                 if(score > currentHighScore && !newHighscore)
                 {
+
+                    
                     currentHighScore = score;
+                    SetHighscore(score);
                     highscoreString = "Highscore: " + std::to_string(currentHighScore);
                     newHighscore = true;
                     highscoreCounter = 120;
@@ -1395,6 +1463,11 @@ int main()
         } break;
         case ENDING:
         {
+            if (score > GetHighscore())
+            {
+                SetHighscore(score);
+            }
+
             if(IsKeyPressed(KEY_M) || volChange)
             {
                 if(!volChange)
@@ -1516,7 +1589,7 @@ int main()
             // Draw Info Border
             DrawTextureEx(infoBorder, {10.0f, -160.0f }, 0.0f, 0.39f, WHITE);
 
-            DrawInfo(scarfy, nebula, scarfyData.rec.height, scarfyInfoData.rec, scarfyInfoData.pos);
+            DrawInfo(scarfy, nebula, powerBar, powerBarAnim, scarfyData.rec.height, scarfyInfoData.rec, scarfyInfoData.pos);
 
         } break;
         case GAMEPLAY:
@@ -1570,6 +1643,12 @@ int main()
 
     EndDrawing();        
     }
+
+        if (score > GetHighscore())
+        {
+            SetHighscore(score);
+        }
+
 
     for(int i = 0; i < 9; i++)
     {
